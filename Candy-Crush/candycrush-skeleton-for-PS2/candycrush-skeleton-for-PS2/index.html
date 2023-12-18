@@ -1,0 +1,483 @@
+<!--
+CandyCrush
+Your Name: Sania Khaja
+Collaborators: https://getbootstrap.com/docs/5.0/utilities/colors/
+https://api.jquery.com/click/
+-->
+<!DOCTYPE html>
+<html>
+<!--
+/* Copyright (c) 2017 MIT 6.813/6.831 course staff, all rights reserved.
+ * Redistribution of original or derived work requires permission of course staff.
+ */
+-->
+
+<head>
+  <meta charset="utf-8">
+  <title>CandyCrush</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.css">
+  <link rel="stylesheet" href="mainLayout.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/2.4.2/seedrandom.js"></script>
+  <script src="candy.js"></script>
+  <script src="board.js"></script>
+  <script src="rules.js"></script>
+  <script>
+    Math.seedrandom(0);
+
+    $.extend({
+      getUrlVars: function() {
+        var vars = [],
+          pair;
+        var pairs = window.location.search.substr(1).split('&');
+        for (var i = 0; i < pairs.length; i++) {
+          pair = pairs[i].split('=');
+          vars.push(pair[0]);
+          vars[pair[0]] = pair[1] &&
+            decodeURIComponent(pair[1].replace(/\+/g, ' '));
+        }
+        return vars;
+      },
+      getUrlVar: function(name) {
+        return $.getUrlVars()[name];
+      }
+    });
+
+    var DEFAULT_BOARD_SIZE = 8;
+
+    var board;
+    var rules;
+
+    var crushingInProgress = false;
+
+    // Helper function to initialize/update the game board
+    function createGameBoard() {
+      var gameBoard = document.getElementById('gameBoard');
+      gameBoard.innerHTML = ''; // Clear the board
+
+      var candies = [];
+      // Adding candies to the table board
+      for (var i = 0; i < DEFAULT_BOARD_SIZE; i++) {
+        var row = gameBoard.insertRow(i);
+        for (var j = 0; j < DEFAULT_BOARD_SIZE; j++) {
+          var candy;
+          if (board.getCandyAt(i, j) == null) {
+            candy = new Candy("white", " ");
+          } else {
+            candy = new Candy(board.getCandyAt(i, j).color, String.fromCharCode(97 + j) + (i + 1));
+            candies.push(candy);
+          }
+          
+          // Styling cells
+          var cell = row.insertCell(j);
+          cell.style.width = '40px';
+          cell.style.height = '40px';
+          cell.style.backgroundColor = candy.color;
+          cell.style.textAlign = 'center';
+          cell.style.verticalAlign = 'middle';
+          cell.style.fontWeight = 'bold';
+          cell.textContent = candy.id;
+          cell.style.color = 'white';
+          if (candy.color === 'yellow') {
+            cell.style.color = 'black';
+          }
+        }
+      }
+    }
+
+    $(document).ready(function() {
+      // Initialize the board and rules
+      if ($.getUrlVar('size') && $.getUrlVar('size') >= 3) {
+        board = new Board($.getUrlVar('size'));
+      } else {
+        board = new Board(DEFAULT_BOARD_SIZE);
+      }
+
+      rules = new Rules(board);
+
+      // Generate a new game board
+      rules.prepareNewGame();
+
+      // Create and display the initial game board after the board is initialized
+      createGameBoard();
+
+      // Enable the text field
+      $('#moveText').prop('disabled', false);
+
+      // Clear the text field and focus it
+      $('#moveText').val('');
+      $('#moveText').focus();
+      
+      // Disable the arrow buttons and "Crush Once" button
+      disableArrowsAndCrushButton();
+    });
+
+    // Function to disable the arrow buttons and "Crush Once" button
+    function disableArrowsAndCrushButton() {
+      $(".btn-secondary").prop('disabled', true).css('background-color', 'gray');
+      $("#crushOnceButton").prop('disabled', true).css('background-color', 'gray');
+    }
+
+    // Handle "New Game" button click
+    $(document).on('click', "#newGameButton", function(evt) {
+      // Initialize the board and rules
+      if ($.getUrlVar('size') && $.getUrlVar('size') >= 3) {
+        board = new Board($.getUrlVar('size'));
+      } else {
+        board = new Board(DEFAULT_BOARD_SIZE);
+      }
+
+      rules = new Rules(board);
+
+      // Generate a new game board
+      rules.prepareNewGame();
+
+      // Disable the text field
+      $('#moveText').prop('disabled', false);
+
+      // Clear the text field and focus it
+      $('#moveText').val('');
+      $('#moveText').focus();
+
+      // Recreate the game board
+      createGameBoard();
+
+      // Reset value
+      crushingInProgress = false;
+
+      // Reset button based on current state
+      updateCrushButton();
+    });
+
+    // Handle up arrow button click event
+    $(document).on('click', "#upButton", function(evt) {
+      if (!crushingInProgress) {
+        // Read the text from the text field
+        var move = $('#moveText').val();
+
+        var inputPos0 = move.charAt(0);  // Get letter
+        var inputPos1 = move.charAt(1);  // Get number
+
+        // Convert input characters to indices
+        var col = letterToIndex[inputPos0];
+        var row = numberToIndex[inputPos1];
+
+        // Check if the move is valid
+        var sourceCandy = board.getCandyAt(row, col);
+        var targetCandy = board.getCandyInDirection(sourceCandy, "up");
+        
+        // Move the candies
+        board.flipCandies(sourceCandy, targetCandy);
+
+        // Trigger the 'move' event to update the UI
+        $(board).trigger('move', {
+          source: sourceCandy,
+          target: targetCandy
+        });
+
+        // Clear the text field and focus it
+        $('#moveText').val('');
+        $('#moveText').focus();
+
+        // Disable the text field
+        $('#moveText').prop('disabled', true);
+
+        // Disable arrows
+        $(".btn-secondary").prop('disabled', true).css('background-color', 'gray');
+
+        // Update game board
+        createGameBoard();
+
+        // Update the "Crush Once" button
+        updateCrushButton();
+      }
+    });
+    // Handle down arrow button click event
+    $(document).on('click', "#downButton", function(evt) {
+      if (!crushingInProgress) {
+        // Read the text from the text field
+        var move = $('#moveText').val();
+
+        var inputPos0 = move.charAt(0);  // save letter
+        var inputPos1 = move.charAt(1);  // save number
+
+        // Convert input characters to indices
+        var col = letterToIndex[inputPos0];
+        var row = numberToIndex[inputPos1];
+
+        // Check if the move is valid
+        var sourceCandy = board.getCandyAt(row, col);
+        var targetCandy = board.getCandyInDirection(sourceCandy, "down");
+        
+        // Move the candies
+        board.flipCandies(sourceCandy, targetCandy);
+
+        // Trigger the 'move' event to update the UI
+        $(board).trigger('move', {
+          source: sourceCandy,
+          target: targetCandy
+        });
+
+        // Clear the text field and focus it
+        $('#moveText').val('');
+        $('#moveText').focus();
+
+        // Disable the text field
+        $('#moveText').prop('disabled', true);
+
+        // Disable the arrow buttons
+        $(".btn-secondary").prop('disabled', true).css('background-color', 'gray');
+
+        // Update Game Board
+        createGameBoard();
+
+        // Update the "Crush Once" button
+        updateCrushButton();
+      }
+    });
+    // Handle left arrow button click event
+    $(document).on('click', "#leftButton", function(evt) {
+      if (!crushingInProgress) {
+        // Read the text from the text field
+        var move = $('#moveText').val();
+
+        var inputPos0 = move.charAt(0);  // save letter
+        var inputPos1 = move.charAt(1);  // save number
+
+        // Convert input characters to indices
+        var col = letterToIndex[inputPos0];
+        var row = numberToIndex[inputPos1];
+
+        // Check if the move is valid
+        var sourceCandy = board.getCandyAt(row, col);
+        var targetCandy = board.getCandyInDirection(sourceCandy, "left");
+        
+        // Move the candies
+        board.flipCandies(sourceCandy, targetCandy);
+
+        // Trigger the 'move' event to update the UI
+        $(board).trigger('move', {
+          source: sourceCandy,
+          target: targetCandy
+        });
+
+        // Clear the text field and focus it
+        $('#moveText').val('');
+        $('#moveText').focus();
+
+        // Disable the text field
+        $('#moveText').prop('disabled', true);
+
+        // Disable arrow buttons
+        $(".btn-secondary").prop('disabled', true).css('background-color', 'gray');
+
+        // update game board
+        createGameBoard();
+
+        // Update the "Crush Once" button
+        updateCrushButton();
+      }
+    });
+    // Handle arrow button click events
+    $(document).on('click', "#rightButton", function(evt) {
+      if (!crushingInProgress) {
+        // Read the text from the text field
+        var move = $('#moveText').val();
+
+        var inputPos0 = move.charAt(0);  // save letter
+        var inputPos1 = move.charAt(1);  // save number
+
+        // Convert input characters to indices
+        var col = letterToIndex[inputPos0];
+        var row = numberToIndex[inputPos1];
+
+        // Check if the move is valid
+        var sourceCandy = board.getCandyAt(row, col);
+        var targetCandy = board.getCandyInDirection(sourceCandy, "right");
+        
+        // Move the candies
+        board.flipCandies(sourceCandy, targetCandy);
+
+        // Trigger the 'move' event to update the UI
+        $(board).trigger('move', {
+          source: sourceCandy,
+          target: targetCandy
+        });
+
+        // Clear the text field and focus it
+        $('#moveText').val('');
+        $('#moveText').focus();
+
+        // Disable the text field
+        $('#moveText').prop('disabled', true);
+
+        // Disable arrow buttons
+        $(".btn-secondary").prop('disabled', true).css('background-color', 'gray');
+
+        // Update game board
+        createGameBoard();
+
+        // Update the "Crush Once" button
+        updateCrushButton();
+      }
+    });
+
+    // Handle "Crush Once" button click
+    $(document).on('click', "#crushOnceButton", function(evt) {
+      if (!crushingInProgress) {
+        var crushes = rules.getCandyCrushes();
+        if (crushes.length > 0) {
+          crushingInProgress = true;
+          // Disable the text field
+          $('#moveText').prop('disabled', true);
+
+          // Remove the crushed candies
+          rules.removeCrushes(crushes);
+          createGameBoard();
+        
+          // Update the "Crush Once" button
+          updateCrushButton();
+
+          // Delay repopulating the board
+          setTimeout(function() {
+            rules.moveCandiesDown();
+            rules.populateBoard();
+            createGameBoard();
+            crushingInProgress = false;
+            updateCrushButton();
+          }, 500);
+        }
+      }
+      // Clear the text field and focus it
+      $('#moveText').val('');
+      $('#moveText').focus();
+    });
+
+    // Function to enable or disable "Crush Once" button and move text field based on the game state
+    function updateCrushButton() {
+      var crushes = rules.getCandyCrushes();
+      var crushOnceButton = $("#crushOnceButton");
+      
+      // Clear the text field and focus it
+      $('#moveText').val('');
+      $('#moveText').focus();
+
+      // preventing click of crush button
+      if (crushingInProgress) {
+        crushOnceButton.prop('disabled', true).css('background-color', 'gray');
+      } else {
+        // Determine if there are any crushes
+        var noCrushes = crushes.length === 0;
+
+        // Define the desired background color based on the presence of crushes
+        var backgroundColor = noCrushes ? 'gray' : 'indigo';
+
+        // Set the disabled state of crushOnceButton based on whether there are crushes
+        crushOnceButton.prop('disabled', noCrushes);
+
+        // Set the background color of crushOnceButton
+        crushOnceButton.css('background-color', backgroundColor);
+        
+        // disables move text field when there are stil candies to be crushed
+        $('#moveText').prop('disabled', !noCrushes);
+
+        // Clear the text field and focus it
+        $('#moveText').val('');
+        $('#moveText').focus();
+      }
+    }
+
+    // Defining a conversion object for letters and numbers
+    var letterToIndex = {
+      'a': 0,
+      'b': 1,
+      'c': 2,
+      'd': 3,
+      'e': 4,
+      'f': 5,
+      'g': 6,
+      'h': 7
+    };
+    var numberToIndex = {
+      '1': 0,
+      '2': 1,
+      '3': 2,
+      '4': 3,
+      '5': 4,
+      '6': 5,
+      '7': 6,
+      '8': 7
+    };
+
+    // Function to enable or disable arrow buttons based on valid user input
+    function updateArrowButtons() {
+      var move = $('#moveText').val();
+      var inputPos0 = move.charAt(0);  // save letter
+      var inputPos1 = move.charAt(1);  // save number
+
+      // Convert input characters to indices
+      var col = letterToIndex[inputPos0];
+      var row = numberToIndex[inputPos1];
+
+      // getting candy at user input position
+      var boardCandy = board.getCandyAt(row, col);
+
+      // Check if user input is invalid or if crushing is in progress and disable arrow buttons in this case
+      if (move.length != 2 || crushingInProgress) {
+        $(".btn-secondary").prop('disabled', true).css('background-color', 'gray');
+      } else {
+        // check user move input and enable arrow buttons that show valid moves
+        if (rules.isMoveTypeValid(boardCandy, "up")) {
+          $("#upButton").prop('disabled', false).css('background-color', 'cyan');
+        }
+        if (rules.isMoveTypeValid(boardCandy, "down")) {
+          $("#downButton").prop('disabled', false).css('background-color', 'cyan');
+        } 
+        if (rules.isMoveTypeValid(boardCandy, "left")) {
+          $("#leftButton").prop('disabled', false).css('background-color', 'cyan');
+        }
+        if (rules.isMoveTypeValid(boardCandy, "right")) {
+          $("#rightButton").prop('disabled', false).css('background-color', 'cyan');
+        }
+      }
+    }
+
+    // Call the function when the user types in the text field
+    $(document).on('input', "#moveText", function(evt) {
+      // Enable or disable arrow buttons based on user input
+      updateArrowButtons();
+    });
+  </script>
+</head>
+<body>
+  <div class="text-center container">
+    <div class="row">
+      <div class="col-md-3" id="firstColumn">
+        <div class="mt-4">
+          <h2 style="color: blue; font-weight: bold;">Candy Crush</h2>
+          <div class="mt-4">
+            <input type="button" class="btn btn-primary" id=newGameButton value="New Game">
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6" id="mainColumn">
+        <table id="gameBoard" class="mt-4 mx-auto" style="width: 320px; height: 320px; border-collapse: separate; border-spacing: 2px;"></table>
+      </div>
+      <div class="col-md-3" id="lastColumn">
+        <div class="mt-4">
+          <label for="CandyToMove" style="font-weight: bold;">Move:</label>
+          <input type="text" id="moveText" class="form-control" style="text-align: center" disabled>
+          <div class="btn-group mt-4" role="group">
+            <button type="button" class="btn btn-secondary" id="upButton" disabled>↑</button>
+            <button type="button" class="btn btn-secondary" id="downButton" disabled>↓</button>
+            <button type="button" class="btn btn-secondary" id="leftButton" disabled>←</button>
+            <button type="button" class="btn btn-secondary" id="rightButton" disabled>→</button>
+          </div>
+          <button type="button" class="btn btn-primary mt-4" id="crushOnceButton" disabled>Crush Once</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
